@@ -1,15 +1,18 @@
 {
-  "name": "tess-gif",
-  "version": "1.0.0",
-  "description": "",
-  "main": "search.js",
+  "name": "tess-search",
+  "version": "0.1.0",
+  "description": "Command-line tool to search the US Trademark Electronic Search Service",
+  "main": "tess.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "Ben Regenspan",
+  "license": "MIT",
   "dependencies": {
+    "bluebird": "^2.9.14",
     "cheerio": "cheeriojs/cheerio#f71387ed334dc3eff66a11923f43b1129112b84d",
+    "loglevel": "^1.2.0",
+    "minimist": "^1.1.1",
     "request-promise": "^0.4.0",
     "tough-cookie": "^0.12.1"
   }
