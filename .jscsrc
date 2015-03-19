@@ -1,0 +1,8 @@
+{
+	"preset": "crockford",
+	"validateIndentation": 4,
+	"disallowDanglingUnderscores": null,
+	"disallowQuotedKeysInObjects": "allButReserved",
+	"requireLineFeedAtFileEnd": null,
+	"validateQuoteMarks": "'"
+}

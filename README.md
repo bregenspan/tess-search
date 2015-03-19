@@ -1,6 +1,9 @@
 Node TESS Search
 ==============================
 
+There is no more direct way to interact with brands than a trademark search. This project
+lets you interact with brands via JavaScript.
+
 **(Work in progress!)**
 
 This is a Node.js script that executes a search of <a href="http://www.uspto.gov/trademarks-application-process/search-trademark-database">TESS</a>,
@@ -16,15 +19,15 @@ Usage
 
 Find all trademarks of Freedom™:
 
-`node tess.js 'freedom[FM]'`
+`node cli.js 'freedom[FM]'`
 
 Find all trademarks with designs incorporating "costumed small mammals, rodents, kangaroos, wallabies":
 
-`node tess.js '030926[dc]'`
+`node cli.js '030926[dc]'`
 
 Print debug info to help figure out why your search for wallabies went horribly wrong:
 
-`node tess.js '030926[dc]' -loglevel=debug`
+`node cli.js '030926[dc]' -loglevel=debug`
 
 
 Output Format
@@ -56,6 +59,6 @@ TODOs
 Disclaimer
 -----------
 
-TESS does not offer an API, so this script relies on content scraping. It attempts to be a very well-behaved
+TESS does not offer an API, this script relies on content scraping. It attempts to be a very well-behaved
 scraper and, to the best of my knowledge, adheres to TESS's terms of use, but there are all kinds of reasons why
 it could break at any time, so please do not use this as the foundational technology for your startup.
