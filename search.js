@@ -3,7 +3,6 @@
  */
 
 // jshint node:true
-/*global process, require*/
 'use strict';
 
 // CONSTANTS
@@ -11,9 +10,19 @@ var HOST = 'http://tmsearch.uspto.gov';
 var HANDLER_URL = HOST + '/bin/gate.exe';
 var LOGIN = HANDLER_URL + '?f=login&p_lang=english&p_d=trmk';
 var SERIAL_ROW_NUMBER = 2;
-var DOCUMENT_LINK_SELECTOR = 'a[href*="f=doc"]';
-var IMAGE_HANDLER_URL = HOST + '/ImageAgent/ImageAgentProxy?getImage={serialNumber}&widthLimit=400&heightLimit=300';
-var LOGOUT_BUTTON_SELECTOR = 'input[value="Logout"]';
+var IMAGE_HANDLER_URL = HOST + '/ImageAgent/ImageAgentProxy?getImage={serialNumber}';
+
+var selectors = {
+    documentLink: 'a[href*="f=doc"]',
+    logoutButton: 'input[value="Logout"]',
+    resultsTable: 'table:contains(Filing Date)',
+    searchForm: 'form[name=search_text]',
+    searchPageLink: 'a:contains("Free Form")',
+    titleContainingError: 'title:contains(Error)'
+};
+
+var MAX_PARALLEL_DOCUMENTS = 1;  // TESS sometimes throws errors when same session requests multiple pages at once
+//var MAX_PARALLEL_IMAGES = 10;
 
 var rp = require('request-promise');
 var Promise = require('bluebird').Promise;
@@ -64,6 +73,16 @@ function TessProgress(message, details) {
 
 
 /**
+ * @param {string} message - user-facing progress message
+ * @param {number} fraction - fraction of the current task this progress event marks completed
+ */
+function TessFractionalProgress(message, fraction) {
+    this.message = message;
+    this.fraction = fraction;
+}
+
+
+/**
  * @param {string} searchTerm - TESS free-form query
  * @param {function} [progressHandler] - optional handler for progress-related events
  */
@@ -83,7 +102,7 @@ function search(searchTerm, progressHandler) {
             })
             .disposer(function (pageData) {
                 var $ = cheerio.load(pageData),
-                    $logoutForm = $(LOGOUT_BUTTON_SELECTOR).closest('form');
+                    $logoutForm = $(selectors.logoutButton).closest('form');
                 if (!$logoutForm.length) {
                     return new TessError('Failed to find TESS logout form!');
                 }
@@ -93,7 +112,7 @@ function search(searchTerm, progressHandler) {
                 return rp.post({
                     uri: HANDLER_URL,
                     form: serializeForm($logoutForm)
-                }).catch(function (response) {
+                }).catch(function () {
                     return new TessError('Encountered an error disposing TESS session!');
                 });
             });
@@ -103,7 +122,7 @@ function search(searchTerm, progressHandler) {
         var $ = cheerio.load(entryPageHtml),
 
         // Get a link to the search page (which includes session token)
-        link = $('a:contains("Free Form")');
+        link = $(selectors.searchPageLink);
         if (!link.length) {
             throw new TessError('Failed to find link to search page!', entryPageHtml);
         }
@@ -113,7 +132,7 @@ function search(searchTerm, progressHandler) {
             .then(function (response) {
                 // Search
                 var $ = cheerio.load(response.body),
-                    formData = serializeForm($('form[name=search_text]'));
+                    formData = serializeForm($(selectors.searchForm));
                 formData.p_s_ALL = searchTerm;
                 formData.a_search = 'Submit Query';
                 formData.p_L = 500;  // 500 results/page
@@ -132,7 +151,8 @@ function search(searchTerm, progressHandler) {
             })
             .then(function (response) {
                 var $ = cheerio.load(response.body),
-                    titleContainingError = $('title:contains(Error)'),
+                    titleContainingError = $(selectors.titleContainingError),
+                    requestsCompleted = 0,
                     documentData;
 
                 if (titleContainingError.length) {
@@ -141,14 +161,40 @@ function search(searchTerm, progressHandler) {
 
                 progressHandler(new TessProgress('Got search response', response.body));
 
-                documentData = $('td:nth-of-type(' + SERIAL_ROW_NUMBER + ') ' + DOCUMENT_LINK_SELECTOR).toArray().map(function (el) {
+                documentData = $('td:nth-of-type(' + SERIAL_ROW_NUMBER + ') ' + selectors.documentLink).toArray().map(function (el) {
                     return {
                         imageUrl: IMAGE_HANDLER_URL.replace('{serialNumber}', $(el).html()),
                         docUrl: HOST + $(el).attr('href')
                     };
                 });
 
-                return documentData;
+                function announceProgress(progress, total) {
+                    var message = 'Retrieving ' + total + ' documents',
+                        fraction = (progress > 0) ? progress / total : 0;
+                    progressHandler(new TessFractionalProgress(message, fraction));
+                }
+
+                function getPromiseForDocument(doc) {
+                    return rp.get(doc.docUrl)
+                        .then(function (document) {
+                            var $ = cheerio.load(document);
+                            requestsCompleted++;
+                            announceProgress(requestsCompleted, documentData.length);
+                            doc.full = {};
+                            $(selectors.resultsTable).find('tr').each(function (i, el) {
+                                var fieldName = $(el).find('td:first-of-type').text().trim(),
+                                    fieldValue = $(el).find('td:last-of-type').text().trim();
+                                doc.full[fieldName] = fieldValue;
+                            });
+                            doc._html = $('body').html();
+                            return doc;
+                        });
+                }
+
+                return Promise.map(documentData, getPromiseForDocument, {
+                    concurrency: MAX_PARALLEL_DOCUMENTS
+                });
+
             });
     });
 }

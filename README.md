@@ -33,27 +33,24 @@ Print debug info to help figure out why your search for wallabies went horribly 
 Output Format
 ---------------
 
-Output is near-useless at the moment and needs work:
-
 ```
 [
   {
     "imageUrl":"http://tmsearch.uspto.gov/ImageAgent/ImageAgentProxy?getImage=86464800&widthLimit=400&heightLimit=300",
-    "docUrl":"http://tmsearch.uspto.gov/bin/gate.exe?f=doc&state=4809:nukzav.2.1"
+    "docUrl":"http://tmsearch.uspto.gov/bin/gate.exe?f=doc&state=4809:nukzav.2.1",
+    "full": { ... }  // object with fields corresponding to those displayed on TESS
   },
   ...
 ]
 ```
 
-(See TODOs)
-
 
 TODOs
 ---------
 
- * After conducting a search, visit each result page and retrieve full data for each result, including registration
-   dates, full wordmarks, and owners.
- * Automatically download all trademark images
+ * Support paging - there is a limit of 500 results until then!
+ * Retry any failed document requests
+ * Retrieve images
 
 
 Disclaimer
