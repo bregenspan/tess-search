@@ -51,6 +51,7 @@ TODOs
  * Support paging - there is a limit of 500 results until then!
  * Retry any failed document requests
  * Retrieve images
+ * Fix logout - does not seem to actually be closing session
 
 
 Disclaimer
