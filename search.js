@@ -9,26 +9,40 @@
 var HOST = 'http://tmsearch.uspto.gov';
 var HANDLER_URL = HOST + '/bin/gate.exe';
 var LOGIN = HANDLER_URL + '?f=login&p_lang=english&p_d=trmk';
-var SERIAL_ROW_NUMBER = 2;
 var IMAGE_HANDLER_URL = HOST + '/ImageAgent/ImageAgentProxy?getImage={serialNumber}';
 
+var IMAGE_FOLDER_NAME = 'images';
+
 var selectors = {
-    documentLink: 'a[href*="f=doc"]',
     logoutButton: 'input[value="Logout"]',
     resultsTable: 'table:contains(Filing Date)',
     searchForm: 'form[name=search_text]',
     searchPageLink: 'a:contains("Free Form")',
+    documentLink: 'td:nth-of-type(2) a[href*="f=doc"]',
     titleContainingError: 'title:contains(Error)'
 };
 
-var MAX_PARALLEL_DOCUMENTS = 1;  // TESS sometimes throws errors when same session requests multiple pages at once
-//var MAX_PARALLEL_IMAGES = 10;
+var imageMimetypes = {
+    'image/jpeg': 'jpg',
+    'image/gif': 'gif',
+    'image/png': 'png'
+};
 
+var MAX_PARALLEL_DOCUMENTS = 1;  // TESS sometimes throws errors when same session requests multiple pages at once
+var MAX_PARALLEL_IMAGES = 10;
+
+var fs = require('fs');
+var magic = require('stream-mmmagic');
 var rp = require('request-promise');
+var request = require('request');  // request-promise doesn't handle streams well, so we regular request for stream case
 var Promise = require('bluebird').Promise;
 var cheerio = require('cheerio');
+var mkdirp = require('mkdirp');
+
+mkdirp(require('path').resolve(__dirname, IMAGE_FOLDER_NAME));
 
 var jar = rp.jar();
+
 
 rp = rp.defaults({
     jar: jar,
@@ -87,6 +101,18 @@ function TessFractionalProgress(message, fraction) {
  * @param {function} [progressHandler] - optional handler for progress-related events
  */
 function search(searchTerm, progressHandler) {
+
+    /**
+     * Calls progress handler with specified message template and incremental status.
+     * @param {string} messageTemplate - templated message
+     * @param {number} progress - # of X finished out of total
+     * @param {number} total - total count of X, representing completion
+     */
+    function announceProgress(messageTemplate, progress, total) {
+        var message = messageTemplate.replace('{total}', total),
+            fraction = (progress > 0) ? progress / total : 0;
+        progressHandler(new TessFractionalProgress(message, fraction));
+    }
 
     /**
      * Gets a TESS session, returning a Disposer for session cleanup
@@ -151,9 +177,7 @@ function search(searchTerm, progressHandler) {
             })
             .then(function (response) {
                 var $ = cheerio.load(response.body),
-                    titleContainingError = $(selectors.titleContainingError),
-                    requestsCompleted = 0,
-                    documentData;
+                    titleContainingError = $(selectors.titleContainingError);
 
                 if (titleContainingError.length) {
                     throw new TessError('Encountered an error querying TESS', $('body').text());
@@ -161,25 +185,24 @@ function search(searchTerm, progressHandler) {
 
                 progressHandler(new TessProgress('Got search response', response.body));
 
-                documentData = $('td:nth-of-type(' + SERIAL_ROW_NUMBER + ') ' + selectors.documentLink).toArray().map(function (el) {
+                return $(selectors.documentLink).toArray().map(function (el) {
                     return {
                         imageUrl: IMAGE_HANDLER_URL.replace('{serialNumber}', $(el).html()),
                         docUrl: HOST + $(el).attr('href')
                     };
                 });
 
-                function announceProgress(progress, total) {
-                    var message = 'Retrieving ' + total + ' documents',
-                        fraction = (progress > 0) ? progress / total : 0;
-                    progressHandler(new TessFractionalProgress(message, fraction));
-                }
+            }).then(function (documentData) {
+                /* Get full data for each document */
+
+                var requestsCompleted = 0;
 
                 function getPromiseForDocument(doc) {
                     return rp.get(doc.docUrl)
                         .then(function (document) {
                             var $ = cheerio.load(document);
                             requestsCompleted++;
-                            announceProgress(requestsCompleted, documentData.length);
+                            announceProgress('Retrieving {total} documents', requestsCompleted, documentData.length);
                             doc.full = {};
                             $(selectors.resultsTable).find('tr').each(function (i, el) {
                                 var fieldName = $(el).find('td:first-of-type').text().trim(),
@@ -194,7 +217,56 @@ function search(searchTerm, progressHandler) {
                 return Promise.map(documentData, getPromiseForDocument, {
                     concurrency: MAX_PARALLEL_DOCUMENTS
                 });
+            }).then(function (documentData) {
+                /* Retrieve images */
 
+                var requestsCompleted = 0;
+
+                function getPromiseForDocument(doc) {
+                    return new Promise(function (resolve) {
+
+                        var input = request
+                            .get(doc.imageUrl)
+                            .on('error', function (err) {
+                                throw new TessError('Encountered an error retrieving image', err);
+                            });
+
+                        // Detect mimetype for file extension
+                        magic(input, function (err, mime, output) {
+                            if (err) {
+                                throw err;
+                            }
+
+                            var extension = imageMimetypes[mime.type],
+                                serialNumber = doc.full['Serial Number'];
+
+                            if (!extension) {
+                                // Not an image - sometimes server responds with text indicating
+                                // no image was available
+                                doc.imageFile = null;
+                                return resolve(doc);
+                            }
+
+                            if (!serialNumber) {
+                                throw new TessError('Document serial number not found!');
+                            }
+
+                            doc.imageFile = IMAGE_FOLDER_NAME + '/' + serialNumber + '.' + extension;
+
+                            output
+                                .pipe(fs.createWriteStream(doc.imageFile))
+                                .on('finish', function () {
+                                    requestsCompleted++;
+                                    announceProgress('Retrieving {total} images', requestsCompleted, documentData.length);
+                                    resolve(doc);
+                                });
+                        });
+                    });
+                }
+
+                return Promise.map(documentData, getPromiseForDocument, {
+                    concurrency: MAX_PARALLEL_IMAGES
+                });
             });
     });
 }
