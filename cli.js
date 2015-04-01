@@ -20,9 +20,15 @@ const search = require('./search');
 const args = require('yargs')
   .option('log', {
     alias: 'l',
-    describe: 'Log level (error, info, debug)',
     default: 'info',
+    describe: 'Log level (error, info, debug)',
     type: 'string'
+  })
+  .option('images', {
+    alias: 'i',
+    default: true,
+    describe: 'Whether to retrieve images and include their filenames in output',
+    type: 'boolean'
   })
   .option('term', {
     alias: 't',
@@ -48,7 +54,7 @@ function progressHandler (event) {
   }
 }
 
-search(searchTerm, progressHandler)
+search(searchTerm, args.images, progressHandler)
   .then(function (results) {
     if (logLevel !== 'debug' && logLevel !== 'trace') {
       results.forEach(function (result) {

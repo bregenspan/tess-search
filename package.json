@@ -4,7 +4,6 @@
   "description": "Command-line tool to search the US Trademark Electronic Search Service",
   "main": "tess.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint ."
   },
   "author": "Ben Regenspan",
@@ -13,7 +12,10 @@
     "bluebird": "^2.9.14",
     "cheerio": "cheeriojs/cheerio#f71387ed334dc3eff66a11923f43b1129112b84d",
     "loglevel": "^1.2.0",
+    "mkdirp": "^0.5.0",
+    "request": "^2.54.0",
     "request-promise": "^0.4.0",
+    "stream-mmmagic": "^2.0.0",
     "tough-cookie": "^0.12.1",
     "yargs": "^8.0.2"
   },

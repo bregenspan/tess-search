@@ -6,13 +6,23 @@ lets you interact with brands via JavaScript.
 
 **(Work in progress!)**
 
-This is a Node.js script that executes a search of <a href="http://www.uspto.gov/trademarks-application-process/search-trademark-database">TESS</a>,
+This is a Node.js script that executes a search of [TESS](http://www.uspto.gov/trademarks-application-process/search-trademark-database),
 the US Patent and Trademark Office's trademark search system, outputting a JSON array containing result page links
 (currently useless!) and image URL links (useful for some purposes).
 
 The term should be specified as a "free-form" TESS search term, meaning it can contain things like boolean operators, quoted exact matches,
-and <a href="http://tess2.uspto.gov/tmdb/dscm/index.htm">Design Codes</a> in addition to regular search terms.
+and [Design Codes](http://tess2.uspto.gov/tmdb/dscm/index.htm) in addition to regular search terms.
 
+
+Installation
+-------------
+
+* Ensure that you have Python 2 installed, as this project relies on [node-stream-mmmagic](https://github.com/seangarner/node-stream-mmmagic), which in turn relies on a native addon module built by node-gyp, which lacks Python 3 support.
+    * If you have both Python 2 and Python 3 installed:
+        * Make sure npm is configured to use Python 2, e.g.:
+            * `which python2.7`
+            * `npm config set python PYTHON_2_PATH_FROM_ABOVE`
+        * Make sure you don't have "python" symlinked to python 3.
 
 Usage
 --------
