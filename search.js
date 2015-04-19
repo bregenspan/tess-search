@@ -144,7 +144,7 @@ function search(searchTerm, progressHandler) {
             });
     }
 
-    return Promise.using(getSession(), function (entryPageHtml) {
+    return Promise.using(getSession(), function loadSearchPage(entryPageHtml) {
         var $ = cheerio.load(entryPageHtml),
 
         // Get a link to the search page (which includes session token)
@@ -155,7 +155,7 @@ function search(searchTerm, progressHandler) {
 
         // Load the search page
         return rp(HOST + link.attr('href'), { resolveWithFullResponse: true })
-            .then(function (response) {
+            .then(function sendSearchQuery(response) {
                 // Search
                 var $ = cheerio.load(response.body),
                     formData = serializeForm($(selectors.searchForm));
@@ -175,7 +175,7 @@ function search(searchTerm, progressHandler) {
                     }
                 });
             })
-            .then(function (response) {
+            .then(function getSearchResultsPage(response) {
                 var $ = cheerio.load(response.body),
                     titleContainingError = $(selectors.titleContainingError);
 
@@ -192,9 +192,7 @@ function search(searchTerm, progressHandler) {
                     };
                 });
 
-            }).then(function (documentData) {
-                /* Get full data for each document */
-
+            }).then(function getDocumentData(documentData) {
                 var requestsCompleted = 0;
 
                 function getPromiseForDocument(doc) {
@@ -217,12 +215,11 @@ function search(searchTerm, progressHandler) {
                 return Promise.map(documentData, getPromiseForDocument, {
                     concurrency: MAX_PARALLEL_DOCUMENTS
                 });
-            }).then(function (documentData) {
-                /* Retrieve images */
+            }).then(function getImages(documentData) {
 
                 var requestsCompleted = 0;
 
-                function getPromiseForDocument(doc) {
+                function getPromiseForImage(doc) {
                     return new Promise(function (resolve) {
 
                         var input = request
@@ -264,7 +261,7 @@ function search(searchTerm, progressHandler) {
                     });
                 }
 
-                return Promise.map(documentData, getPromiseForDocument, {
+                return Promise.map(documentData, getPromiseForImage, {
                     concurrency: MAX_PARALLEL_IMAGES
                 });
             });
