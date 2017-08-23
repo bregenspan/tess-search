@@ -155,7 +155,6 @@ function search (searchTerm, withImages, progressHandler) {
         formData.p_s_ALL = searchTerm;
         formData.a_search = 'Submit Query';
         formData.p_L = 500; // 500 results/page
-        console.log(formData);
         // cookieJar.setCookie(request.cookie('queryCookie=' + encodeURIComponent(formData.p_s_ALL)), HOST);
 
         progressHandler(new TessProgress('Querying ' + searchTerm));
