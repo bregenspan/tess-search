@@ -46,7 +46,7 @@ function progressHandler (event) {
   // Log out progress (with debug info if debug loglevel is enabled)
   let message = event.message;
   if (event.fraction !== undefined) {
-    message += ': ' + (event.fraction * 100) + '% complete';
+    message += ': ' + Math.round((event.fraction * 1000) / 10) + '% complete';
   }
   log.info(message);
   if (event.details) {
