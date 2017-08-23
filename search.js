@@ -68,6 +68,7 @@ function TessError (message, details) {
   this.name = 'TessError';
   this.message = message;
   this.details = details;
+  this.stack = (new Error()).stack;
 }
 TessError.prototype = Object.create(Error.prototype);
 TessError.prototype.constructor = TessError;
