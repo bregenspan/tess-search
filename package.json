@@ -4,7 +4,8 @@
   "description": "Command-line tool to search the US Trademark Electronic Search Service",
   "main": "tess.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint ."
   },
   "author": "Ben Regenspan",
   "license": "MIT",
@@ -15,5 +16,13 @@
     "request-promise": "^0.4.0",
     "tough-cookie": "^0.12.1",
     "yargs": "^8.0.2"
+  },
+  "devDependencies": {
+    "eslint": "^4.5.0",
+    "eslint-config-standard": "^10.2.1",
+    "eslint-plugin-import": "^2.7.0",
+    "eslint-plugin-node": "^5.1.1",
+    "eslint-plugin-promise": "^3.5.0",
+    "eslint-plugin-standard": "^3.0.1"
   }
 }
