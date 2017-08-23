@@ -35,9 +35,9 @@ Find all trademarks with designs incorporating "costumed small mammals, rodents,
 
 `node cli.js -t '030926[dc]'`
 
-Print debug info to help figure out why your search for wallabies went horribly wrong:
+Print help/documentation of flags:
 
-`node cli.js -t '030926[dc]' --loglevel=debug`
+`node cli.js`
 
 
 Output Format
@@ -61,7 +61,7 @@ TODOs
  * Support paging - there is a limit of 500 results until then!
  * Retry any failed document requests
  * Retrieve images
- * Fix logout - does not seem to actually be closing session
+ * Fix logout - not consistently closing session
 
 
 Disclaimer
