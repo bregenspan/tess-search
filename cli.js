@@ -61,7 +61,7 @@ search(searchTerm, args.images, progressHandler)
         delete result._html; // debug data, we don't need
       });
     }
-    log.info(results);
+    console.log(results);
   }).catch(function (error) {
     log.error('ERROR: ' + error.message);
     log.error('ERROR DETAILS:');
