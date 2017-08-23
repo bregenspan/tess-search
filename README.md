@@ -29,15 +29,15 @@ Usage
 
 Find all trademarks of Freedom™:
 
-`node cli.js 'freedom[FM]'`
+`node cli.js -t 'freedom[FM]'`
 
 Find all trademarks with designs incorporating "costumed small mammals, rodents, kangaroos, wallabies":
 
-`node cli.js '030926[dc]'`
+`node cli.js -t '030926[dc]'`
 
 Print debug info to help figure out why your search for wallabies went horribly wrong:
 
-`node cli.js '030926[dc]' -loglevel=debug`
+`node cli.js -t '030926[dc]' --loglevel=debug`
 
 
 Output Format
