@@ -4,11 +4,17 @@
 
 'use strict';
 
+const cheerio = require('cheerio');
+const fs = require('fs');
+const magic = require('stream-mmmagic');
+const mkdirp = require('mkdirp');
+const rp = require('request-promise');
+const Promise = require('bluebird').Promise;
+
 // CONSTANTS
 const HOST = 'http://tmsearch.uspto.gov';
 const HANDLER_URL = HOST + '/bin/gate.exe';
 const LOGIN = HANDLER_URL + '?f=login&p_lang=english&p_d=trmk';
-const SERIAL_ROW_NUMBER = 2;
 const IMAGE_HANDLER_URL = HOST + '/ImageAgent/ImageAgentProxy?getImage={serialNumber}';
 
 const selectors = {
@@ -21,16 +27,22 @@ const selectors = {
 };
 
 const MAX_PARALLEL_DOCUMENTS = 1; // TESS sometimes throws errors when same session requests multiple pages at once
-// var MAX_PARALLEL_IMAGES = 10;
+const MAX_PARALLEL_IMAGES = 10;
 
-let rp = require('request-promise');
-const Promise = require('bluebird').Promise;
-const cheerio = require('cheerio');
+const IMAGE_FOLDER_NAME = 'images';
 
-const jar = rp.jar();
+const imageMimetypes = {
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/png': 'png'
+};
 
-rp = rp.defaults({
-  jar: jar,
+mkdirp(require('path').resolve(__dirname, IMAGE_FOLDER_NAME));
+
+const cookieJar = rp.jar();
+
+const request = rp.defaults({
+  jar: cookieJar,
   // proxy: 'http://localhost:8888',
   headers: {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; rv:36.0) Gecko/20100101 Firefox/36.0 (compatible; TESS-GIF)'
@@ -56,6 +68,7 @@ function TessError (message, details) {
   this.name = 'TessError';
   this.message = message;
   this.details = details;
+  this.stack = (new Error()).stack;
 }
 TessError.prototype = Object.create(Error.prototype);
 TessError.prototype.constructor = TessError;
@@ -80,17 +93,30 @@ function TessFractionalProgress (message, fraction) {
 
 /**
  * @param {string} searchTerm - TESS free-form query
+ * @param {boolean} withImages - Whether to retrieve images and include their filenames in object output
  * @param {function} [progressHandler] - optional handler for progress-related events
  */
-function search (searchTerm, progressHandler) {
+function search (searchTerm, withImages, progressHandler) {
   /**
-   * Gets a TESS session, returning a Disposer for session cleanup
-   * @returns Bluebird.Promise.prototype.disposer
-   */
+     * Calls progress handler with specified message template and incremental status.
+     * @param {string} messageTemplate - templated message
+     * @param {number} progress - # of X finished out of total
+     * @param {number} total - total count of X, representing completion
+     */
+  function announceProgress (messageTemplate, progress, total) {
+    const message = messageTemplate.replace('{total}', total);
+    const fraction = (progress > 0) ? progress / total : 0;
+    progressHandler(new TessFractionalProgress(message, fraction));
+  }
+
+  /**
+     * Gets a TESS session, returning a Disposer for session cleanup
+     * @returns Bluebird.Promise.prototype.disposer
+     */
   function getSession () {
     progressHandler(new TessProgress('Logging in to TESS...'));
 
-    return rp(LOGIN)
+    return request(LOGIN)
       .catch(function (e) {
         throw new TessError('Encountered error logging in to TESS', e);
       })
@@ -103,7 +129,7 @@ function search (searchTerm, progressHandler) {
 
         progressHandler(new TessProgress('Logging out of TESS...'));
 
-        return rp.post({
+        return request.post({
           uri: HANDLER_URL,
           form: serializeForm($logoutForm)
         }).catch(function () {
@@ -130,11 +156,11 @@ function search (searchTerm, progressHandler) {
         formData.p_s_ALL = searchTerm;
         formData.a_search = 'Submit Query';
         formData.p_L = 500; // 500 results/page
-        // jar.setCookie(rp.cookie('queryCookie=' + encodeURIComponent(formData.p_s_ALL)), HOST);
+        // cookieJar.setCookie(request.cookie('queryCookie=' + encodeURIComponent(formData.p_s_ALL)), HOST);
 
         progressHandler(new TessProgress('Querying ' + searchTerm));
 
-        return rp.post({
+        return request.post({
           uri: HANDLER_URL,
           form: formData,
           resolveWithFullResponse: true,
@@ -146,8 +172,6 @@ function search (searchTerm, progressHandler) {
       .then(function (response) {
         const $ = cheerio.load(response.body);
         const titleContainingError = $(selectors.titleContainingError);
-        let requestsCompleted = 0;
-        let documentData;
 
         if (titleContainingError.length) {
           throw new TessError('Encountered an error querying TESS', $('body').text());
@@ -155,25 +179,23 @@ function search (searchTerm, progressHandler) {
 
         progressHandler(new TessProgress('Got search response', response.body));
 
-        documentData = $('td:nth-of-type(' + SERIAL_ROW_NUMBER + ') ' + selectors.documentLink).toArray().map(function (el) {
+        return $(selectors.documentLink).toArray().map(function (el) {
           return {
             imageUrl: IMAGE_HANDLER_URL.replace('{serialNumber}', $(el).html()),
             docUrl: HOST + $(el).attr('href')
           };
         });
+      }).then(function (documentData) {
+        /* Get full data for each document */
 
-        function announceProgress (progress, total) {
-          const message = 'Retrieving ' + total + ' documents';
-          const fraction = (progress > 0) ? progress / total : 0;
-          progressHandler(new TessFractionalProgress(message, fraction));
-        }
+        let requestsCompleted = 0;
 
         function getPromiseForDocument (doc) {
-          return rp.get(doc.docUrl)
+          return request.get(doc.docUrl)
             .then(function (document) {
-              const $ = cheerio.load(document);
+              let $ = cheerio.load(document);
               requestsCompleted++;
-              announceProgress(requestsCompleted, documentData.length);
+              announceProgress('Retrieving {total} documents', requestsCompleted, documentData.length);
               doc.full = {};
               $(selectors.resultsTable).find('tr').each(function (i, el) {
                 const fieldName = $(el).find('td:first-of-type').text().trim();
@@ -187,6 +209,59 @@ function search (searchTerm, progressHandler) {
 
         return Promise.map(documentData, getPromiseForDocument, {
           concurrency: MAX_PARALLEL_DOCUMENTS
+        });
+      }).then(function (documentData) {
+        /* Retrieve images */
+
+        if (!withImages) {
+          return documentData;
+        }
+
+        let requestsCompleted = 0;
+
+        function getPromiseForImage (doc) {
+          return new Promise(function (resolve) {
+            const input = request
+              .get(doc.imageUrl)
+              .on('error', function (err) {
+                throw new TessError('Encountered an error retrieving image', err);
+              });
+
+            // Detect mimetype for file extension
+            magic(input, function (err, mime, output) {
+              if (err) {
+                throw err;
+              }
+
+              const extension = imageMimetypes[mime.type];
+              const serialNumber = doc.full['Serial Number'];
+
+              if (!extension) {
+                // Not an image - sometimes server responds with text indicating
+                // no image was available
+                doc.imageFile = null;
+                return resolve(doc);
+              }
+
+              if (!serialNumber) {
+                throw new TessError('Document serial number not found!');
+              }
+
+              doc.imageFile = IMAGE_FOLDER_NAME + '/' + serialNumber + '.' + extension;
+
+              output
+                .pipe(fs.createWriteStream(doc.imageFile))
+                .on('finish', function () {
+                  requestsCompleted++;
+                  announceProgress('Retrieving {total} images', requestsCompleted, documentData.length);
+                  resolve(doc);
+                });
+            });
+          });
+        }
+
+        return Promise.map(documentData, getPromiseForImage, {
+          concurrency: MAX_PARALLEL_IMAGES
         });
       });
   });

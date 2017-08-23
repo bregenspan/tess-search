@@ -20,9 +20,15 @@ const search = require('./search');
 const args = require('yargs')
   .option('log', {
     alias: 'l',
-    describe: 'Log level (error, info, debug)',
     default: 'info',
+    describe: 'Log level (error, info, debug)',
     type: 'string'
+  })
+  .option('images', {
+    alias: 'i',
+    default: true,
+    describe: 'Whether to retrieve images and include their filenames in output',
+    type: 'boolean'
   })
   .option('term', {
     alias: 't',
@@ -40,7 +46,7 @@ function progressHandler (event) {
   // Log out progress (with debug info if debug loglevel is enabled)
   let message = event.message;
   if (event.fraction !== undefined) {
-    message += ': ' + (event.fraction * 100) + '% complete';
+    message += ': ' + Math.round((event.fraction * 1000) / 10) + '% complete';
   }
   log.info(message);
   if (event.details) {
@@ -48,14 +54,14 @@ function progressHandler (event) {
   }
 }
 
-search(searchTerm, progressHandler)
+search(searchTerm, args.images, progressHandler)
   .then(function (results) {
     if (logLevel !== 'debug' && logLevel !== 'trace') {
       results.forEach(function (result) {
         delete result._html; // debug data, we don't need
       });
     }
-    log.info(results);
+    console.log(results);
   }).catch(function (error) {
     log.error('ERROR: ' + error.message);
     log.error('ERROR DETAILS:');
