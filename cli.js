@@ -14,21 +14,29 @@
 // jshint node:true
 'use strict';
 
-var log = require('loglevel');
-var parseArgs = require('minimist');
-var search = require('./search');
+const log = require('loglevel');
+const search = require('./search');
 
-var argv = require('minimist')(process.argv.slice(2));
-if (!argv._.length) {
-    log.error('Please specify a TESS free-form search term -- e.g. `"Infowars"` or `030926[dc]`.');
-    process.exit(1);
-}
+const args = require('yargs')
+  .option('log', {
+    alias: 'l',
+    describe: 'Log level (error, info, debug)',
+    default: 'info',
+    type: 'string'
+  })
+  .option('term', {
+    alias: 't',
+    describe: 'TESS free-form search term -- e.g. `"Infowars"` or `030926[dc]`.',
+    type: 'string'
+  })
+  .demandOption(['term'])
+  .argv;
 
-var searchTerm = argv._[0];
-var logLevel = argv.loglevel || 'info';
+const searchTerm = args.term;
+const logLevel = args.log;
 log.setLevel(logLevel);
 
-function progressHandler(event) {
+function progressHandler (event) {
     // Log out progress (with debug info if debug loglevel is enabled)
     var message = event.message;
     if (event.fraction !== undefined) {
